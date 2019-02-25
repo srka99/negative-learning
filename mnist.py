@@ -257,24 +257,25 @@ for epoch in range(11, 20 + 1):
 # Testing:
 
 models = [model_normal, model_negative_relu, model_hybrid, model_hybrid_nr, model_hybrid_alt]
-model_names = ['Normal:', 'HCUT:', 'VCUT:', 'DCUT:', 'QCUT:']
 
 datasets = [test_loader, test_loader_horizontal_cut, test_loader_vertical_cut, test_loader_diagonal_cut, test_loader_quarter_cut]
+dataset_names = ['Normal:', 'HCUT:', 'VCUT:', 'DCUT:', 'QCUT:']
+
 for i in range(3):
     size = "{0}x{0}".format(5 + 2 * i)
     datasets.append(test_loader_triple_cut[i])
-    model_names.append("TCUT {}:".format(size))
+    dataset_names.append("TCUT {}:".format(size))
     datasets.append(test_loader_triple_cut_blur[i])
-    model_names.append("Noise {}:".format(size))
+    dataset_names.append("Noise {}:".format(size))
     datasets.append(test_loader_triple_cut_noise[i])
-    model_names.append("Blur {}:".format(size))
+    dataset_names.append("Blur {}:".format(size))
     datasets.append(test_loader_triple_cut_replaced1[i])
-    model_names.append("Replaced1 {}:".format(size))
+    dataset_names.append("Replaced1 {}:".format(size))
     datasets.append(test_loader_triple_cut_replaced3[i])
-    model_names.append("Replaced3 {}:".format(size))
+    dataset_names.append("Replaced3 {}:".format(size))
 
 for i, dataset in enumerate(datasets):
-    print('Testing -- ' + model_names[i])
+    print('Testing -- ' + dataset_names[i])
     for model in models:
         test(model, device, dataset)
 
