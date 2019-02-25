@@ -5,6 +5,8 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
 from tqdm import tqdm
+from blur import GaussianSmoothing
+import random
 import time
 
 torch.manual_seed(1)
@@ -89,14 +91,43 @@ test_loader = mnist_loader()
 test_loader_vertical_cut = mnist_loader()
 test_loader_horizontal_cut = mnist_loader()
 test_loader_diagonal_cut = mnist_loader()
-test_loader_triple_cut = mnist_loader()
-
-
-
+test_loader_quarter_cut = mnist_loader()
+test_loader_triple_cut = [mnist_loader(), mnist_loader(), mnist_loader()]  # 5x5, 7x7 and 9x9
+test_loader_triple_cut_noise = [mnist_loader(), mnist_loader(), mnist_loader()]
+test_loader_triple_cut_replaced1 = [mnist_loader(), mnist_loader(), mnist_loader()]
+test_loader_triple_cut_replaced3 = [mnist_loader(), mnist_loader(), mnist_loader()]
+test_loader_triple_cut_blur = [mnist_loader(), mnist_loader(), mnist_loader()]
 
 print('Generating new test sets...')
 
+
+def get_random_pairs(test_loader, num):
+    label = test_loader.dataset.test_labels[num]
+    while True:
+        pairs = []
+        while len(set(pairs)) != 3:
+            pairs = [random.randint(0, 10000 - 1) for i in range(3)]
+
+        got_duplicate_label = False
+        for pair in pairs:
+            if test_loader.dataset.test_labels[pair] == label:
+                got_duplicate_label = True
+
+        if got_duplicate_label:
+            continue
+        else:
+            return pairs
+
+
+smoothing = GaussianSmoothing(1, 5, 1)
+
 for num in tqdm(range(0, 10000)):
+    random_pairs = get_random_pairs(test_loader, num)
+
+    sample = test_loader.dataset.test_data[num].type('torch.FloatTensor')
+    sample = F.pad(sample.reshape(1, 1, 28, 28), (2, 2, 2, 2), mode='reflect')
+    blur = smoothing(sample).reshape(28, 28)
+
     for x in range(28):
         for y in range(28):
             if y < 14:
@@ -105,8 +136,21 @@ for num in tqdm(range(0, 10000)):
                 test_loader_horizontal_cut.dataset.test_data[num, x, y] = 0
             if (x < 14 and y > 14) or (x > 14 and y < 14):
                 test_loader_diagonal_cut.dataset.test_data[num, x, y] = 0
-            if (5 < x < 15 and 5 <  y < 15) or (17 < x < 27 and 10 < y < 20) or (7 <  x < 17 and 16 < y < 26):
-                test_loader_triple_cut.dataset.test_data[num, x, y] = 0
+            if x < 14 and y < 14:
+                test_loader_quarter_cut.dataset.test_data[num, x, y] = 0
+            for i in range(3):
+                half = i + 2  # squares will have side 2*half + 1
+                if (10 - half <= x <= 10 + half and 10 - half <= y <= 10 + half) or (22 - half <= x <= 22 + half and 22 - half <= y <= 22 + half) or (12 - half <= x <= 12 + half and 21 - half <= y <= 21 + half):
+                    test_loader_triple_cut[i].dataset.test_data[num, x, y] = 0
+                    test_loader_triple_cut_noise[i].dataset.test_data[num, x, y] = random.randint(0, 255)
+                    test_loader_triple_cut_replaced1[i].dataset.test_data[num, x, y] = test_loader.dataset.test_data[random_pairs[0], x, y]
+                    test_loader_triple_cut_blur[i].dataset.test_data[num, x, y] = blur[x, y]
+                    if 10 - half <= x <= 10 + half and 10 - half <= y <= 10 + half:
+                        test_loader_triple_cut_replaced3[i].dataset.test_data[num, x, y] = test_loader.dataset.test_data[random_pairs[0], x, y]
+                    elif 22 - half <= x <= 22 + half and 22 - half <= y <= 22 + half:
+                        test_loader_triple_cut_replaced3[i].dataset.test_data[num, x, y] = test_loader.dataset.test_data[random_pairs[1], x, y]
+                    elif 12 - half <= x <= 12 + half and 21 - half <= y <= 21 + half:
+                        test_loader_triple_cut_replaced3[i].dataset.test_data[num, x, y] = test_loader.dataset.test_data[random_pairs[2], x, y]
 
 # import matplotlib.pyplot as plt
 
@@ -212,9 +256,21 @@ for epoch in range(11, 20 + 1):
 # Testing:
 
 models = [model_normal, model_negative_relu, model_hybrid, model_hybrid_nr, model_hybrid_alt]
-model_names = ['Normal:', 'HCUT:', 'VCUT:', 'DCUT:', 'TCUT:']
+model_names = ['Normal:', 'HCUT:', 'VCUT:', 'DCUT:', 'QCUT:']
 
-datasets = [test_loader, test_loader_horizontal_cut, test_loader_vertical_cut, test_loader_diagonal_cut, test_loader_triple_cut]
+datasets = [test_loader, test_loader_horizontal_cut, test_loader_vertical_cut, test_loader_diagonal_cut, test_loader_quarter_cut]
+for i in range(3):
+    size = "{0}x{0}".format(5 + 2 * i)
+    datasets.append(test_loader_triple_cut[i])
+    model_names.append("TCUT {}:".format(size))
+    datasets.append(test_loader_triple_cut_blur[i])
+    model_names.append("Noise {}:".format(size))
+    datasets.append(test_loader_triple_cut_noise[i])
+    model_names.append("Blur {}:".format(size))
+    datasets.append(test_loader_triple_cut_replaced1[i])
+    model_names.append("Replaced1 {}:".format(size))
+    datasets.append(test_loader_triple_cut_replaced3[i])
+    model_names.append("Replaced3 {}:".format(size))
 
 for i, dataset in enumerate(datasets):
     print('Testing -- ' + model_names[i])
