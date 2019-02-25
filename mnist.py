@@ -10,6 +10,7 @@ import random
 import time
 
 torch.manual_seed(1)
+random.seed(0)
 
 LR = 0.1
 MOM = 0.5
